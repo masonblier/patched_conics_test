@@ -1,10 +1,7 @@
 use crate::GameState;
 use crate::loading::{SettingsConfigAsset,SettingsConfigAssets};
 
-use bevy::{
-    prelude::*,
-    window::CursorGrabMode,
-};
+use bevy::prelude::*;
 
 pub struct CameraPlugin;
 
@@ -13,9 +10,6 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::Menu), setup_camera);
         app.add_systems(OnEnter(GameState::Playing), setup_sun);
-        app.add_systems(Update, (
-            grab_mouse.run_if(in_state(GameState::Playing)),
-        ));
     }
 }
 
@@ -37,7 +31,7 @@ fn setup_camera(
             ..Default::default()
         },
         GameCamera { },
-    ));    
+    ));
 }
 
 #[derive(Component)]
@@ -51,24 +45,4 @@ fn setup_sun(mut commands: Commands) {
         ..Default::default()
     },
     GameSunLight { }));
-}
-
-// This system grabs the mouse when the left mouse button is pressed
-// and releases it when the escape key is pressed
-fn grab_mouse(
-    mut windows: Query<&mut Window>,
-    mouse: Res<ButtonInput<MouseButton>>,
-    key: Res<ButtonInput<KeyCode>>,
-) {
-    let mut window = windows.single_mut();
-
-    if mouse.just_pressed(MouseButton::Left) {
-        window.cursor.visible = false;
-        window.cursor.grab_mode = CursorGrabMode::Locked;
-    }
-
-    if key.just_pressed(KeyCode::Escape) {
-        window.cursor.visible = true;
-        window.cursor.grab_mode = CursorGrabMode::None;
-    }
 }

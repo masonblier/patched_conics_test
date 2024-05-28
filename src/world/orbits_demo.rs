@@ -1,30 +1,40 @@
 use std::f32::consts::PI;
 
 use crate::GameState;
+use crate::camera::GameCamera;
 use crate::loading::{SettingsConfigAsset,SettingsConfigAssets};
-use crate::world::{dv_at_pos, r_at_theta};
+use crate::overlay_ui::{OverlayUiBodyInfo,OverylayUiControls,ViewingBody};
+use crate::world::OrbitConic;
 
 use bevy::prelude::*;
 
+// helper macro
+macro_rules! deg {
+    ($x:expr) => {
+        $x * 180. / PI
+    }
+}
 
 // This plugin renders demo entities
 pub struct OrbitsDemoPlugin;
 impl Plugin for OrbitsDemoPlugin {
     fn build(&self, app: &mut App) {
         app
-            .init_gizmo_group::<MyRoundGizmos>()
             .add_systems(OnEnter(GameState::Playing), setup_demo)
-            .add_systems(Update, update_demo.run_if(in_state(GameState::Playing)));
+            .add_systems(Update, update_demo.run_if(in_state(GameState::Playing)))
+            .add_systems(Update, update_demo_controls.run_if(in_state(GameState::Playing)));
     }
 }
 
-// We can create our own gizmo config group!
-#[derive(Default, Reflect, GizmoConfigGroup)]
-struct MyRoundGizmos {}
+// colors
+const COLORS: [Color; 4] = [Color::GREEN, Color::YELLOW, Color::BLUE, Color::RED];
 
 #[derive(Component)]
 pub struct SatEntity {
+    pub idx: usize,
     pub vel: Vec3,
+    pub conic: OrbitConic,
+    pub color: Color,
 }
 
 fn setup_demo(
@@ -33,7 +43,7 @@ fn setup_demo(
     mut materials: ResMut<Assets<StandardMaterial>>,
     config_handles: Res<SettingsConfigAssets>,
     config_assets: Res<Assets<SettingsConfigAsset>>,
-) { 
+) {
     let settings = config_assets.get(config_handles.settings.clone()).unwrap();
 
     // body
@@ -50,101 +60,123 @@ fn setup_demo(
         ..Default::default()
     });
 
-    // o0
-    let o0_initial_pos = Vec3::Z * r_at_theta(settings.body_fac, settings.o0_ecc, 0.);
-    let o0_mesh = Sphere::default().mesh().ico(5).unwrap();
-    let o0_mesh_handle = meshes.add(o0_mesh);
-    let o0_mat = materials.add(StandardMaterial {
-        base_color: Color::YELLOW,
-        ..default()
-    });
-    commands.spawn((MaterialMeshBundle {
-        mesh: o0_mesh_handle.clone(),
-        material: o0_mat.clone(),
-        transform: Transform::from_translation(o0_initial_pos).with_scale(Vec3::splat(settings.sat_scale)),
-        ..Default::default()
-    }, SatEntity { vel: settings.o0_initial_vel }));
+    // satellites
+    for (idx, sat) in settings.satellites.iter().enumerate() {
 
-    // o1
-    let o1_initial_pos = Vec3::Z * r_at_theta(settings.body_fac, settings.o1_ecc, 0.);
-    let o1_mesh = Sphere::default().mesh().ico(5).unwrap();
-    let o1_mesh_handle = meshes.add(o1_mesh);
-    let o1_mat = materials.add(StandardMaterial {
-        base_color: Color::BLUE,
-        ..default()
-    });
-    commands.spawn((MaterialMeshBundle {
-        mesh: o1_mesh_handle.clone(),
-        material: o1_mat.clone(),
-        transform: Transform::from_translation(o1_initial_pos).with_scale(Vec3::splat(settings.sat_scale)),
-        ..Default::default()
-    }, SatEntity { vel: settings.o1_initial_vel }));
+        let conic = OrbitConic::from_initial(
+            sat.initial_pos,
+            sat.initial_vel,
+            settings.body_mass,
+            Vec3::Y);
+        let mesh = Sphere::default().mesh().ico(5).unwrap();
+        let mesh_handle = meshes.add(mesh);
+        let color = COLORS[idx % COLORS.len()];
+        let mat = materials.add(StandardMaterial {
+            base_color: color.clone(),
+            ..default()
+        });
+        commands.spawn((MaterialMeshBundle {
+            mesh: mesh_handle.clone(),
+            material: mat.clone(),
+            transform: Transform::from_translation(sat.initial_pos).with_scale(Vec3::splat(sat.scale)),
+            ..Default::default()
+        }, SatEntity {
+            idx,
+            vel: sat.initial_vel,
+            conic: conic,
+            color,
+         }));
 
-
-    // o2
-    let o2_initial_pos = Vec3::Z * r_at_theta(settings.body_fac, settings.o2_ecc, 0.);
-    let o2_mesh = Sphere::default().mesh().ico(5).unwrap();
-    let o2_mesh_handle = meshes.add(o2_mesh);
-    let o2_mat = materials.add(StandardMaterial {
-        base_color: Color::GREEN,
-        ..default()
-    });
-    commands.spawn((MaterialMeshBundle {
-        mesh: o2_mesh_handle.clone(),
-        material: o2_mat.clone(),
-        transform: Transform::from_translation(o2_initial_pos).with_scale(Vec3::splat(settings.sat_scale)),
-        ..Default::default()
-    }, SatEntity { vel: settings.o2_initial_vel }));
-
-
-    // o3
-    let o3_initial_pos = Vec3::Z * r_at_theta(settings.body_fac, settings.o3_ecc, 0.);
-    let o3_mesh = Sphere::default().mesh().ico(5).unwrap();
-    let o3_mesh_handle = meshes.add(o3_mesh);
-    let o3_mat = materials.add(StandardMaterial {
-        base_color: Color::RED,
-        ..default()
-    });
-    commands.spawn((MaterialMeshBundle {
-        mesh: o3_mesh_handle.clone(),
-        material: o3_mat.clone(),
-        transform: Transform::from_translation(o3_initial_pos).with_scale(Vec3::splat(settings.sat_scale)),
-        ..Default::default()
-    }, SatEntity { vel: settings.o3_initial_vel }));
+    }
 }
-
 
 fn update_demo(
     time: Res<Time>,
+    controls: Res<OverylayUiControls>,
     mut gizmos: Gizmos,
-    mut sat_query: Query<(&mut Transform, &mut SatEntity)>,
+    mut sat_query: Query<(&mut Transform, &mut SatEntity), Without<GameCamera>>,
+    mut body_info_query: Query<&mut Text, With<OverlayUiBodyInfo>>,
+    mut camera_query: Query<&mut Transform, With<GameCamera>>,
     config_handles: Res<SettingsConfigAssets>,
     config_assets: Res<Assets<SettingsConfigAsset>>,
 ) {
-    let settings = config_assets.get(config_handles.settings.clone()).unwrap();
-
     // update sat entity
-    for (mut sat_transform, mut sat_query) in &mut sat_query {
-        sat_transform.translation += sat_query.vel * time.delta_seconds();
-        sat_query.vel += dv_at_pos(time.delta_seconds(), settings.body_fac, sat_transform.translation);
+    for (mut sat_transform, mut sat) in &mut sat_query {
+        sat_transform.translation += sat.vel * time.delta_seconds();
+        let dv = sat.conic.dv_at_pos(sat_transform.translation);
+        sat.vel += dv * time.delta_seconds();
+
+        // draw conic path
+        draw_conic_path(sat.conic, &mut gizmos, sat.color.clone());
+
+        // update body info ui
+        if ViewingBody::Satellite(sat.idx) == controls.viewing_body {
+            let mut body_info = body_info_query.single_mut();
+            body_info.sections[0].value = format!("Satellite {}:\n\
+                p: {:.2},{:.2},{:.2}, v: {:.2},{:.2},{:.2}\n\
+                h: {:.2}, i: {:.2}°, e: {:.2}\n\
+                Ω: {:.2}°, ω: {:.2}°, ν: {:.2}°",
+                sat.idx,
+                sat_transform.translation.x, sat_transform.translation.y, sat_transform.translation.z,
+                sat.vel.x, sat.vel.y, sat.vel.z,
+                sat.conic.h, deg!(sat.conic.i), sat.conic.e,
+                deg!(sat.conic.big_omega), deg!(sat.conic.omega), deg!(sat.conic.nu));
+
+            // update camera
+            let settings = config_assets.get(config_handles.settings.clone()).unwrap();
+            let mut camera_transform = camera_query.single_mut();
+            camera_transform.translation = sat_transform.translation + settings.camera_pos;
+            camera_transform.look_at(sat_transform.translation, Vec3::Y);
+        }
 
         // reset position of sat on parabolic trajectory when out-of-bounds
         if sat_transform.translation.length() > 20. {
             sat_transform.translation.x = -sat_transform.translation.x;
-            sat_query.vel.z = -sat_query.vel.z;
+            sat.vel.z = -sat.vel.z;
         }
     }
-    
-    // draw conics
-    draw_conic_path(settings.body_fac, settings.o0_ecc, &mut gizmos, Color::YELLOW);
-    draw_conic_path(settings.body_fac, settings.o1_ecc, &mut gizmos, Color::BLUE);
-    draw_conic_path(settings.body_fac, settings.o2_ecc, &mut gizmos, Color::GREEN);
-    draw_conic_path(settings.body_fac, settings.o3_ecc, &mut gizmos, Color::RED);
+}
+
+fn update_demo_controls(
+    mut controls: ResMut<OverylayUiControls>,
+    mut body_info_query: Query<&mut Text, With<OverlayUiBodyInfo>>,
+    config_handles: Res<SettingsConfigAssets>,
+    config_assets: Res<Assets<SettingsConfigAsset>>,
+    mut camera_query: Query<&mut Transform, With<GameCamera>>,
+    key: Res<ButtonInput<KeyCode>>,
+) {
+    let settings = config_assets.get(config_handles.settings.clone()).unwrap();
+
+    // check for tab for next body
+    if key.just_pressed(KeyCode::Tab) {
+        if let ViewingBody::Satellite(idx) = controls.viewing_body {
+            if idx + 1 == settings.satellites.len() {
+                controls.viewing_body = ViewingBody::None;
+            } else {
+                controls.viewing_body = ViewingBody::Satellite(idx + 1);
+            }
+        } else {
+            controls.viewing_body = ViewingBody::Satellite(0);
+        }
+    }
+
+    // body info if no sat
+    if ViewingBody::None == controls.viewing_body {
+        let mut body_info = body_info_query.single_mut();
+        body_info.sections[0].value = format!("Body:\n\
+            p: {:.2},{:.2},{:.2}\n\
+            m: {:.2}",
+            0., 0., 0., settings.body_mass);
+
+        // update camera
+        let mut camera_transform = camera_query.single_mut();
+        camera_transform.translation = settings.camera_pos;
+        camera_transform.look_at(settings.camera_look_at, Vec3::Y);
+    }
 }
 
 fn draw_conic_path(
-    fac: f32,
-    ecc: f32,
+    conic: OrbitConic,
     gizmos: &mut Gizmos,
     color: Color,
 ) {
@@ -152,11 +184,11 @@ fn draw_conic_path(
     for n in 0..STEPS {
         let theta1 = (n as f32 - 0.5) * 2. * PI / (STEPS as f32);
         let theta2 = (n as f32 + 0.5) * 2. * PI / (STEPS as f32);
-        let r1 = r_at_theta(fac, ecc, theta1);
-        if r1 > 30. {
+        let r1 = conic.r_at_theta(theta1);
+        if r1 > 30. || r1 < 0. {
             continue;
         }
-        let r2 = r_at_theta(fac, ecc, theta2);
+        let r2 = conic.r_at_theta(theta2);
         const NUDGE: f32 = 0.02; // todo wtf
         let d1 = Vec3::new(f32::sin(theta1 + NUDGE), 0., f32::cos(theta1 + NUDGE));
         let d2 = Vec3::new(f32::sin(theta2 + NUDGE), 0., f32::cos(theta2 + NUDGE));

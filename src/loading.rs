@@ -21,6 +21,7 @@ impl Plugin for LoadingPlugin {
             LoadingState::new(GameState::Loading)
                 .continue_to_state(GameState::Menu)
                 .load_collection::<SettingsConfigAssets>()
+                .load_collection::<FontAssets>()
                 .load_collection::<TextureAssets>(),
         );
     }
@@ -36,29 +37,32 @@ pub struct SettingsConfigAssets {
 }
 
 #[derive(AssetCollection, Resource)]
+pub struct FontAssets {
+    #[asset(path = "fonts/FiraMono-Medium.ttf")]
+    pub fira: Handle<Font>,
+}
+
+#[derive(AssetCollection, Resource)]
 pub struct TextureAssets {
     #[asset(path = "textures/bevy.png")]
     pub bevy: Handle<Image>,
 }
 
 // Config asset loader
-
+#[derive(Asset, TypePath, Debug, Deserialize)]
+pub struct SatelliteConfig {
+    pub scale: f32,
+    pub initial_pos: Vec3,
+    pub initial_vel: Vec3,
+}
 #[derive(Asset, TypePath, Debug, Deserialize)]
 pub struct SettingsConfigAsset {
     pub mouse_speed: f32,
     pub camera_pos: Vec3,
     pub camera_look_at: Vec3,
     pub body_scale: f32,
-    pub sat_scale: f32,
-    pub body_fac: f32,
-    pub o0_ecc: f32,
-    pub o0_initial_vel: Vec3,
-    pub o1_ecc: f32,
-    pub o1_initial_vel: Vec3,
-    pub o2_ecc: f32,
-    pub o2_initial_vel: Vec3,
-    pub o3_ecc: f32,
-    pub o3_initial_vel: Vec3,
+    pub body_mass: f32,
+    pub satellites: Vec<SatelliteConfig>,
 }
 
 #[derive(Default)]

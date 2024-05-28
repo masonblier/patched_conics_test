@@ -3,11 +3,13 @@
 mod camera;
 mod loading;
 mod menu;
+mod overlay_ui;
 mod world;
 
 use crate::camera::CameraPlugin;
 use crate::loading::LoadingPlugin;
 use crate::menu::MenuPlugin;
+use crate::overlay_ui::OverlayUiPlugin;
 use crate::world::OrbitsDemoPlugin;
 
 use bevy::app::App;
@@ -36,6 +38,7 @@ impl Plugin for GamePlugin {
             LoadingPlugin,
             CameraPlugin,
             MenuPlugin,
+            OverlayUiPlugin,
             OrbitsDemoPlugin,
         ));
 

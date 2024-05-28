@@ -1,15 +1,13 @@
 # patched_conics_test
 
-Patched conics ui test. Uses the [Bevy engine](https://bevyengine.org/). Based on the [Bevy Game Template](https://github.com/NiklasEi/bevy_game_template).
+Patched conics ui test. References [Orbital Mechanics Notes](https://orbital-mechanics.space/intro.html). Uses the [Bevy engine](https://bevyengine.org/). Based on the [Bevy Game Template](https://github.com/NiklasEi/bevy_game_template).
 
 Work in progress! Todo:
-- Calculate eccentricity and other parameters from initial position and velocity
 - Off-plane orbits
-- Add second body, patch conic of sattelite for sphere-of-influence change
-- Various precision bugs, nudge factor
+- Add second body, patch conic of satellite for sphere-of-influence change
+- Various precision bugs, remove nudge factor
 
-![conics_test_01](https://github.com/masonblier/patched_conics_test/assets/677787/c7e0345f-d015-4a99-a849-72850a9d718c)
-
+![patched_conics_02](https://github.com/masonblier/patched_conics_test/assets/677787/ab4fdffb-87f1-4b6e-b2a1-31f460f84e2b)
 
 # Running from source
 
@@ -17,4 +15,4 @@ Work in progress! Todo:
 
 # License
 
-This project is licensed under [CC0 1.0 Universal](LICENSE)
+This project is licensed under [CC0 1.0 Universal](LICENSE). Some assets under respective licenses.
