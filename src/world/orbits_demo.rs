@@ -27,7 +27,7 @@ impl Plugin for OrbitsDemoPlugin {
 }
 
 // colors
-const COLORS: [Color; 4] = [Color::GREEN, Color::YELLOW, Color::BLUE, Color::RED];
+const COLORS: [Color; 6] = [Color::GREEN, Color::YELLOW, Color::BLUE, Color::RED, Color::PURPLE, Color::ORANGE];
 
 #[derive(Component)]
 pub struct SatEntity {
@@ -189,9 +189,11 @@ fn draw_conic_path(
             continue;
         }
         let r2 = conic.r_at_theta(theta2);
-        const NUDGE: f32 = 0.02; // todo wtf
-        let d1 = Vec3::new(f32::sin(theta1 + NUDGE), 0., f32::cos(theta1 + NUDGE));
-        let d2 = Vec3::new(f32::sin(theta2 + NUDGE), 0., f32::cos(theta2 + NUDGE));
+        const NUDGE: f32 = 0.05; // todo wtf
+        let x_vec = conic.initial_r.cross(conic.h_vec).normalize();
+        let z_vec = conic.initial_r.normalize();
+        let d1 = x_vec * f32::sin(conic.nu + theta1 + NUDGE) + z_vec * f32::cos(conic.nu + theta1 + NUDGE);
+        let d2 = x_vec * f32::sin(conic.nu + theta2 + NUDGE) + z_vec * f32::cos(conic.nu + theta2 + NUDGE);
         gizmos.ray(
             d1 * r2,
             d2 * r2 - d1 * r1,

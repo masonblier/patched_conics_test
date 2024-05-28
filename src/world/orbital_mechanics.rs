@@ -9,6 +9,8 @@ pub const G: f32 = 6.67408e-11;
 #[derive(Clone, Copy, Debug)]
 pub struct OrbitConic {
     pub body_mass: f32, // mass of barycenter/body
+    pub initial_r: Vec3, // initial position relative to barycenter
+    pub h_vec: Vec3, // vector perpendicular to orbital plane
     pub h: f32, // angular momentum
     pub i: f32, // inclination
     pub big_omega: f32, // right ascension of ascending node
@@ -47,12 +49,20 @@ impl OrbitConic {
         // argument of periapsis
         let omega = 2. * PI - f32::acos(n_vec.dot(e_vec) / (n * e));
 
-        // true anomaly
-        let nu = f32::acos(position.normalize().dot(e_vec.normalize()));
+        // initial true anomaly, from -180. to 180.
+        let nu = if e_vec.length() <= 0. {
+            0.
+        } else if 0. > e_vec.cross(position).dot(h_vec) {
+            -f32::acos(position.normalize().dot(e_vec.normalize()))
+        } else {
+            f32::acos(position.normalize().dot(e_vec.normalize()))
+        };
 
         // return
         OrbitConic {
             body_mass,
+            initial_r: position,
+            h_vec,
             h,
             i,
             big_omega,
