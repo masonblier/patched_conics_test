@@ -111,16 +111,22 @@ fn update_demo(
 
         // update body info ui
         if ViewingBody::Satellite(sat.idx) == controls.viewing_body {
+            // current true anomoly
+            let t_nu = sat.conic.nu_at_pos(sat_transform.translation);
+            let t = sat.conic.t_at_nu(t_nu);
+
             let mut body_info = body_info_query.single_mut();
             body_info.sections[0].value = format!("Satellite {}:\n\
                 p: {:.2},{:.2},{:.2}, v: {:.2},{:.2},{:.2}\n\
                 h: {:.2}, i: {:.2}°, e: {:.2}\n\
-                Ω: {:.2}°, ω: {:.2}°, ν: {:.2}°",
+                Ω: {:.2}°, ω: {:.2}°, ν: {:.2}°\n\
+                t_ν: {:.2}°, t: {:.2}",
                 sat.idx,
                 sat_transform.translation.x, sat_transform.translation.y, sat_transform.translation.z,
                 sat.vel.x, sat.vel.y, sat.vel.z,
                 sat.conic.h, deg!(sat.conic.i), sat.conic.e,
-                deg!(sat.conic.big_omega), deg!(sat.conic.omega), deg!(sat.conic.nu));
+                deg!(sat.conic.big_omega), deg!(sat.conic.omega), deg!(sat.conic.nu),
+                deg!(t_nu), t);
 
             // update camera
             let settings = config_assets.get(config_handles.settings.clone()).unwrap();

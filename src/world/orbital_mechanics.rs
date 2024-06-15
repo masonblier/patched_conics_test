@@ -15,6 +15,7 @@ pub struct OrbitConic {
     pub i: f32, // inclination
     pub big_omega: f32, // right ascension of ascending node
     pub e: f32, // eccentricity
+    pub e_vec: Vec3, // eccentricity vector
     pub omega: f32, // argument of periapsis
     pub nu: f32, // initial true anomoly
 }
@@ -67,12 +68,13 @@ impl OrbitConic {
             i,
             big_omega,
             e,
+            e_vec,
             omega,
             nu,
         }
     }
 
-    // calculate distance from body (anomoly?) for given angle from periapsis
+    // calculate distance from body for given angle from periapsis (true anomaly)
     pub fn r_at_theta(
         &self,
         theta: f32,
@@ -86,6 +88,43 @@ impl OrbitConic {
         rel_pos: Vec3,
     ) -> Vec3 {
         G * self.body_mass * -rel_pos.normalize() / rel_pos.length_squared()
+    }
+
+    // calculate time at given anomaly
+    pub fn t_at_nu(
+        &self,
+        nu: f32,
+    ) -> f32 {
+        let mu = G * self.body_mass;
+        // elliptical
+        if self.e < 1. {
+            // mean anomoly
+            let me_nu = 2. * f32::atan(f32::sqrt((1. - self.e) / (1. + self.e)) * f32::tan(nu / 2.))
+                - (self.e * f32::sqrt(1. - self.e.powi(2)) * f32::sin(nu)) / (1. + self.e * f32::cos(nu));
+            // t
+            me_nu * self.h.powi(3) / (mu.powi(2) * (1. - self.e.powi(2)).powf(3./2.))
+
+        // hyperbolic
+        } else {
+            let mh_nu = (self.e * f32::sqrt(self.e.powi(2) - 1.) * f32::sin(nu)) / (1. + self.e * f32::cos(nu))
+                - f32::ln((f32::sqrt(self.e + 1.) + f32::sqrt(self.e - 1.) * f32::tan(nu/2.))
+                    / (f32::sqrt(self.e + 1.) - f32::sqrt(self.e - 1.) * f32::tan(nu/2.)));
+            mh_nu * self.h.powi(3) / (mu.powi(2) * (self.e.powi(2) - 1.).powf(3./2.))
+        }
+    }
+
+    // calculate true anomaly of position
+    pub fn nu_at_pos(
+        &self,
+        position: Vec3,
+    ) -> f32 {
+        if self.e_vec.length() <= 0. {
+            0.
+        } else if 0. > self.e_vec.cross(position).dot(self.h_vec) {
+            -f32::acos(position.normalize().dot(self.e_vec.normalize()))
+        } else {
+            f32::acos(position.normalize().dot(self.e_vec.normalize()))
+        }
     }
 }
 
