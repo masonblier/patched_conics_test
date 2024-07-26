@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use std::f32::consts::PI;
 
+use super::newton_solver;
+
 // gravitational constant
 pub const G: f32 = 6.67408e-11;
 
@@ -126,6 +128,52 @@ impl OrbitConic {
             f32::acos(position.normalize().dot(self.e_vec.normalize()))
         }
     }
+
+    // calculate true anomaly at time t
+    pub fn nu_at_t(
+        &self,
+        t: f32,
+    ) -> f32 {
+        let mu = G * self.body_mass;
+
+        // elliptical
+        if self.e < 1. {
+            let a = self.h.powi(2) / (mu * (1. - self.e.powi(2)));
+            let period = 2. * PI / mu.sqrt() * a.powf(3. / 2.);
+            let me_nu = 2. * PI * t / period;
+
+            // use newton's method to solve for eccentric anomaly
+            let e = self.e;
+            let f = {|x: f32|
+                x - e * x.sin() - me_nu
+            };
+            let df = {|x: f32|
+                1. - e * x.cos()
+            };
+            let ec_nu = newton_solver(f, df, PI);
+
+            let nu = 2. * (((1. + e) / (1. - e)).sqrt() * (ec_nu / 2.).tan()).atan();
+            nu
+
+        // hyperbolic
+        } else {
+            let me_nu = mu.powi(2) / self.h.powi(3) * (self.e.powi(2) - 1.).powf(3. / 2.) * t;
+
+            // use newton's method to solve for eccentric anomaly
+            let e = self.e;
+            let f = {|x: f32|
+                e * x.sinh() - x - me_nu
+            };
+            let df = {|x: f32|
+                e * x.cosh() - 1.
+            };
+            let ec_nu = newton_solver(f, df, PI);
+
+            let nu = 2. * (((e + 1.) / (e - 1.)).sqrt() * (ec_nu / 2.).tanh()).atan();
+            nu
+        }
+    }
+
 }
 
 
