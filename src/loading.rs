@@ -62,6 +62,7 @@ pub struct SettingsConfigAsset {
     pub camera_look_at: Vec3,
     pub body_scale: f32,
     pub body_mass: f32,
+    pub moons: Vec<SatelliteConfig>,
     pub satellites: Vec<SatelliteConfig>,
 }
 

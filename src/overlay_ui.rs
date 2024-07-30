@@ -9,7 +9,7 @@ pub struct OverlayUiBodyInfo;
 
 #[derive(Default, PartialEq)]
 pub enum ViewingBody {
-    // Body(usize),
+    Moon(usize),
     Satellite(usize),
     #[default]
     None,

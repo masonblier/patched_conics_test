@@ -19,7 +19,8 @@ pub struct OrbitConic {
     pub e: f32, // eccentricity
     pub e_vec: Vec3, // eccentricity vector
     pub omega: f32, // argument of periapsis
-    pub nu: f32, // initial true anomoly
+    pub initial_nu: f32, // initial true anomoly
+    pub period: f32, // orbit period
 }
 
 impl OrbitConic {
@@ -53,13 +54,17 @@ impl OrbitConic {
         let omega = 2. * PI - f32::acos(n_vec.dot(e_vec) / (n * e));
 
         // initial true anomaly, from -180. to 180.
-        let nu = if e_vec.length() <= 0. {
+        let initial_nu = if e_vec.length() <= 0. {
             0.
         } else if 0. > e_vec.cross(position).dot(h_vec) {
             -f32::acos(position.normalize().dot(e_vec.normalize()))
         } else {
             f32::acos(position.normalize().dot(e_vec.normalize()))
         };
+
+        // period
+        let a = h.powi(2) / (mu * (1. - e.powi(2)));
+        let period = 2. * PI / mu.sqrt() * a.powf(3. / 2.);
 
         // return
         OrbitConic {
@@ -72,7 +77,8 @@ impl OrbitConic {
             e,
             e_vec,
             omega,
-            nu,
+            initial_nu,
+            period,
         }
     }
 
@@ -81,7 +87,39 @@ impl OrbitConic {
         &self,
         theta: f32,
     ) -> f32{
-        self.h.powi(2) / (G * self.body_mass * (1. + self.e * f32::cos(theta)))
+        self.h.powi(2) / (G * self.body_mass * (1. + self.e * f32::cos(self.initial_nu + theta)))
+    }
+
+    // calculate orientation relative to parent body's center
+    pub fn dir_at_theta(
+        &self,
+        theta: f32,
+    ) -> Vec3 {
+        let x_vec = self.h_vec.cross(self.initial_r).normalize();
+        let z_vec = self.initial_r.normalize();
+        x_vec * f32::sin(theta) + z_vec * f32::cos(theta)
+    }
+
+    // calculate position relative to body center
+    pub fn pos_at_theta(
+        &self,
+        theta: f32,
+    ) -> Vec3 {
+        self.r_at_theta(theta) * self.dir_at_theta(theta)
+    }
+
+    // calculate velocity for a given anomaly
+    pub fn vel_at_theta(
+        &self,
+        theta: f32,
+    ) -> Vec3 {
+        // v_w = mu / h * np.array((-np.sin(nu), e + np.cos(nu), 0))
+        let t_vel = G * self.body_mass / self.h;
+        let nu_r = self.dir_at_theta(-self.initial_nu);
+        let z_vec = self.h_vec.cross(nu_r).normalize();
+        let x_vec = nu_r.normalize();
+        let v_dir = x_vec * -f32::sin(self.initial_nu + theta) + z_vec * (self.e + f32::cos(self.initial_nu + theta));
+        t_vel * v_dir
     }
 
     // calculate change in velocity for given position relative to body center
@@ -91,7 +129,6 @@ impl OrbitConic {
     ) -> Vec3 {
         G * self.body_mass * -rel_pos.normalize() / rel_pos.length_squared()
     }
-
     // calculate time at given anomaly
     pub fn t_at_nu(
         &self,
@@ -138,9 +175,7 @@ impl OrbitConic {
 
         // elliptical
         if self.e < 1. {
-            let a = self.h.powi(2) / (mu * (1. - self.e.powi(2)));
-            let period = 2. * PI / mu.sqrt() * a.powf(3. / 2.);
-            let me_nu = 2. * PI * t / period;
+            let me_nu = 2. * PI * t / self.period;
 
             // use newton's method to solve for eccentric anomaly
             let e = self.e;
@@ -209,6 +244,92 @@ mod tests {
         assert_f!(test_oc.big_omega, rad!(190.6197));
         assert_f!(test_oc.e, 0.94754106);
         assert_f!(test_oc.omega, rad!(303.091));
-        assert_f!(test_oc.nu, rad!(159.6116));
+        assert_f!(test_oc.initial_nu, rad!(159.6116));
+    }
+
+
+    #[test]
+    fn test_orbit_fns_circular() {
+        let test_oc = OrbitConic::from_initial(
+            Vec3::new(0., 0., 1000.),
+            Vec3::new(19.96497, 0., 0.),
+            398600. / G,
+            Vec3::Y,
+        );
+        assert_f!(test_oc.e + 0.1, 0. + 0.1);
+        assert_f!(test_oc.initial_nu + 0.1, 0. + 0.1);
+        let pos_0 = test_oc.pos_at_theta(0.);
+        let pos_1 = test_oc.pos_at_theta(PI / 2.);
+        let pos_2 = test_oc.pos_at_theta(PI);
+        let pos_3 = test_oc.pos_at_theta(3. * PI / 2.);
+        assert_f!(pos_0.z, 1000.);
+        assert_f!(pos_1.x, 1000.);
+        assert_f!(pos_2.z, -1000.);
+        assert_f!(pos_3.x, -1000.);
+        let vel_0 = test_oc.vel_at_theta(0.);
+        let vel_1 = test_oc.vel_at_theta(PI / 2.);
+        let vel_2 = test_oc.vel_at_theta(PI);
+        let vel_3 = test_oc.vel_at_theta(3. * PI / 2.);
+        assert_f!(vel_0.x, 19.96497);
+        assert_f!(vel_1.z, -19.96497);
+        assert_f!(vel_2.x, -19.96497);
+        assert_f!(vel_3.z, 19.96497);
+
+        let test_oc2 = OrbitConic::from_initial(
+            Vec3::new(1000., 0., 0.),
+            Vec3::new(0., 0., -19.96497),
+            398600. / G,
+            Vec3::Y,
+        );
+        assert_f!(test_oc2.e + 0.1, 0. + 0.1);
+        assert_f!(test_oc2.initial_nu + 0.1, 0. + 0.1);
+        let pos_0 = test_oc2.pos_at_theta(0.);
+        let pos_1 = test_oc2.pos_at_theta(PI / 2.);
+        let pos_2 = test_oc2.pos_at_theta(PI);
+        let pos_3 = test_oc2.pos_at_theta(3. * PI / 2.);
+        assert_f!(pos_0.x, 1000.);
+        assert_f!(pos_1.z, -1000.);
+        assert_f!(pos_2.x, -1000.);
+        assert_f!(pos_3.z, 1000.);
+        let vel_0 = test_oc2.vel_at_theta(0.);
+        let vel_1 = test_oc2.vel_at_theta(PI / 2.);
+        let vel_2 = test_oc2.vel_at_theta(PI);
+        let vel_3 = test_oc2.vel_at_theta(3. * PI / 2.);
+        assert_f!(vel_0.z, -19.96497);
+        assert_f!(vel_1.x, -19.96497);
+        assert_f!(vel_2.z, 19.96497);
+        assert_f!(vel_3.x, 19.96497);
+    }
+
+    #[test]
+    fn test_orbit_fns_ellipse_apoapsis_start() {
+        let test_oc3 = OrbitConic::from_initial(
+            Vec3::new(1000., 0., 0.),
+            Vec3::new(0., 0., -14.),
+            398600. / G,
+            Vec3::Y,
+        );
+        assert_f!(test_oc3.e, 0.50827897);
+        assert_f!(test_oc3.initial_nu, PI);
+        let r_0 = test_oc3.r_at_theta(0.);
+        let r_2 = test_oc3.r_at_theta(PI);
+        assert_f!(r_0, 1000.);
+        assert_f!(r_2, 326.01465);
+        let pos_0 = test_oc3.pos_at_theta(0.);
+        let pos_1 = test_oc3.pos_at_theta(PI / 2.);
+        let pos_2 = test_oc3.pos_at_theta(PI);
+        let pos_3 = test_oc3.pos_at_theta(3. * PI / 2.);
+        assert_f!(pos_0.x, 1000.);
+        assert_f!(pos_1.x, -0.00002149381);
+        assert_f!(pos_2.x, -326.01465);
+        assert_f!(pos_3.x, 0.0000058637156);
+        let vel_0 = test_oc3.vel_at_theta(0.);
+        let vel_1 = test_oc3.vel_at_theta(PI / 2.);
+        let vel_2 = test_oc3.vel_at_theta(PI);
+        let vel_3 = test_oc3.vel_at_theta(3. * PI / 2.);
+        assert_f!(vel_0.z, -14.);
+        assert_f!(vel_1.x, -28.471428);
+        assert_f!(vel_2.z, 42.942856);
+        assert_f!(vel_3.x, 28.471428);
     }
 }

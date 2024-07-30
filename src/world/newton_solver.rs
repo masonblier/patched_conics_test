@@ -2,14 +2,11 @@ const EPSILON: f32 = 0.000001;
 const MAX_ITERATIONS: u32 = 20;
 
 // approximate solution of given f,df using newton's method
-pub fn newton_solver<F,G>(
-    f: F,
-    df: G,
+pub fn newton_solver(
+    f: impl Fn(f32) -> f32,
+    df: impl Fn(f32) -> f32,
     x0: f32,
-) -> f32 where
-    F: Fn(f32) -> f32,
-    G: Fn(f32) -> f32,
-{
+) -> f32 {
     let mut x = x0;
     let mut delta = (0. - f(x)).abs();
     let mut iterations = 0;
